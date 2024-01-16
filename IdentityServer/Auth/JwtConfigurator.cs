@@ -27,6 +27,8 @@ public class JwtConfigurator
         var now = DateTime.UtcNow;
         var exp = now.Add(TokenLifespan);
 
+        var key = new SigningCredentials(SigningKey, SecurityAlgorithms.HmacSha256);
+
         var tokenHandler = new JwtSecurityTokenHandler();
         var tokenDescriptor = new SecurityTokenDescriptor
         {
@@ -34,9 +36,9 @@ public class JwtConfigurator
             NotBefore = now,
             Expires = exp,
             Issuer = JwtIssuer,
-            Audience = JwtIssuer,
-            SigningCredentials = new SigningCredentials(SigningKey, SecurityAlgorithms.HmacSha256),
-        };
+            Audience = JwtIssuer,            
+            SigningCredentials = key,
+        };        
         var token = tokenHandler.CreateToken(tokenDescriptor);
         return tokenHandler.WriteToken(token);
     }

@@ -1,14 +1,20 @@
 ﻿using IdentityServer.Auth;
 using IdentityServer.Data;
+using IdentityServer.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Hosting.Server.Features;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.IdentityModel.Logging;
+using Serilog;
 using System;
+using System.IdentityModel.Tokens.Jwt;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace IdentityServer;
@@ -21,6 +27,10 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
     public void ConfigureServices(IServiceCollection services)
     {
         services.AddControllersWithViews();
+        // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+        services.AddEndpointsApiExplorer();
+        services.AddSwaggerGen();
+
 
         var migrationsResolver = new MigrationsResolver(Configuration);
         var jwtConfigurator = new JwtConfigurator(Configuration);
@@ -51,26 +61,40 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                 .AddJwtBearer(options =>
                 {
                     options.RequireHttpsMetadata = false;
+                    options.SaveToken = true;
+#if DEBUG
+                    IdentityModelEventSource.ShowPII = true;
+                    IdentityModelEventSource.LogCompleteSecurityArtifact = true;
+#endif
                     options.TokenValidationParameters = new()
                     {
                         ValidateIssuer = false,
-                        ValidateIssuerSigningKey = true,
-                        ValidateAudience = true,
-                        ValidateLifetime = true,
                         ValidIssuer = jwtConfigurator.JwtIssuer,
+                        
+                        ValidateIssuerSigningKey = false,
+                        IssuerSigningKey = jwtConfigurator.SigningKey,
+
+                        ValidateAudience = false,
                         ValidAudience = jwtConfigurator.JwtIssuer,
+
+                        ValidateLifetime = true,
                         ClockSkew = TimeSpan.FromSeconds(3 * 60),
-                        IssuerSigningKey = jwtConfigurator.SigningKey
                     };
+/*
                     options.Events = new JwtBearerEvents
                     {
                         OnMessageReceived = ctx =>
                         {
+                            Log.Information($"Requst: [{ctx.Request.Method}] {ctx.Request.Path}");
                             ctx.Token = ctx.Request.Cookies[JwtConfigurator.JwtCookieName];
                             return Task.CompletedTask;
-                        }
+                        },                        
                     };
+*/
+                    
                 });
+
+        services.AddSingleton<HostAddressService>();
 
         /*
         var builder = services.AddIdentityServer(options =>
@@ -87,10 +111,20 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         */
     }
 
-    public void Configure(IApplicationBuilder app)
+    public void Configure(IApplicationBuilder app, IHost host)
     {
+        var hostAddress = app.ServerFeatures.Get<IServerAddressesFeature>().Addresses.FirstOrDefault();
+        app.ApplicationServices.GetRequiredService<HostAddressService>().HostAddress = hostAddress;
+
+        if (string.IsNullOrWhiteSpace(hostAddress)) Log.Warning($"{nameof(HostAddressService)} could not get an address from {nameof(IServerAddressesFeature)}");
+        else Log.Information($"Host address is {hostAddress}");
+
+        MigrationsResolver.MigrateDatabaseAsync(host).GetAwaiter().GetResult();
+
         if (Environment.IsDevelopment())
         {
+            app.UseSwagger();
+            app.UseSwaggerUI();
             app.UseDeveloperExceptionPage();
         }
 
@@ -100,13 +134,13 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         app.UseRouting();
 
 
+        app.UseAuthentication();
         app.UseIdentityServer();
+        app.UseAuthorization();
 
-        // uncomment, if you want to add MVC
-        //app.UseAuthorization();
-        //app.UseEndpoints(endpoints =>
-        //{
-        //    endpoints.MapDefaultControllerRoute();
-        //});
+        app.UseEndpoints(endpoints =>
+        {
+            endpoints.MapDefaultControllerRoute();
+        });
     }
 }

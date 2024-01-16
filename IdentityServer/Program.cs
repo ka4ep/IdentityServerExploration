@@ -16,7 +16,7 @@ namespace IdentityServer
                 .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
                 .MinimumLevel.Override("Microsoft.Hosting.Lifetime", LogEventLevel.Information)
                 .MinimumLevel.Override("System", LogEventLevel.Warning)
-                .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", LogEventLevel.Information)
+                .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", LogEventLevel.Verbose)
                 .Enrich.FromLogContext()
                 // uncomment to write to Azure diagnostics stream
                 //.WriteTo.File(
@@ -30,6 +30,9 @@ namespace IdentityServer
 
             try
             {
+
+
+
                 Log.Information("Starting host...");
                 CreateHostBuilder(args).Build().Run();
                 return 0;
