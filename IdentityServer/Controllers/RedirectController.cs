@@ -12,20 +12,37 @@ namespace IdentityServer.Controllers;
 public class RedirectController : ControllerBase
 {
     [HttpPost("Get")]
-    public IResult Get(string data)
+    public async Task<IActionResult> Get(string data)
     {
-        return Results.Ok();
+        await Response.WriteAsJsonAsync(data);
+        return new EmptyResult();
     }
 
 
     [Authorize]
-    [HttpGet("Test")]
+    [HttpGet(nameof(Test))]
     public async Task<IActionResult> Test()
     {
         var rts = this.HttpContext.RequestServices.GetService<IRefreshTokenService>();
 
-
         await Response.WriteAsJsonAsync($"{{ \"Test\": \"Successful\" }}");
+        return new EmptyResult();
+    }
+
+    [Authorize(Policy = "Admin")]
+    [HttpGet(nameof(AdminOnly))]
+    public async Task<IActionResult> AdminOnly()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Administrator\": \"Allowed\" }}");
+        return new EmptyResult();
+    }
+
+    [Authorize(Policy = "Admin")]
+    [Authorize(Policy = "Invoice")]
+    [HttpGet(nameof(AdminAndInvoiceOnly))]
+    public async Task<IActionResult> AdminAndInvoiceOnly()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Administrator\": \"Allowed\", \"InvoiceOperator\": \"Allowed\" }}");
         return new EmptyResult();
     }
 }
