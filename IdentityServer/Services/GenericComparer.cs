@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿#nullable enable
+using System.Collections.Generic;
 
 namespace IdentityServer.Services;
 
@@ -34,3 +35,4 @@ public class GenericComparer<T> : EqualityComparer<T>
     public delegate bool GenericComparerEquals<V>(V? obj1, V? obj2);
     public delegate int GenericComparerHash<V>(V? obj);
 }
+#nullable restore

@@ -1,0 +1,14 @@
+﻿@model System.Collections.ObjectModel.ObservableCollection<IdentityServer.Data.LogSink.LogLine>
+
+<table width="100%">
+
+@foreach (var line in @Model)
+{
+        <tr style="color: @line.DarkThemeColor">
+            <td>
+                @line.Message
+            </td>
+        </tr>
+}
+
+</table>

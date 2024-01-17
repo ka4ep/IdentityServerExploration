@@ -1,4 +1,5 @@
 ﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.HttpLogging;
 using Microsoft.AspNetCore.Mvc;
 
 namespace IdentityServer.Controllers;
@@ -7,9 +8,15 @@ namespace IdentityServer.Controllers;
 [Route("/")]
 public class HomeController : Controller
 {
-    [Route("/")]
+    [Route("")]
     public IActionResult Index()
     {
         return View();
+    }
+
+    [Route("FetchLogs")]    
+    public IActionResult FetchLogs()
+    {
+        return PartialView("LogItemsList", Program.logSink.Lines);
     }
 }

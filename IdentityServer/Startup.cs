@@ -1,5 +1,7 @@
 ﻿using IdentityServer.Auth;
+using IdentityServer.Controllers;
 using IdentityServer.Data;
+using IdentityServer.Helpers;
 using IdentityServer.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -96,25 +98,30 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                     {
                         OnMessageReceived = ctx =>
                         {
-                            Log.Information($"Requst: [{ctx.Request.Method}] {ctx.Request.Path}");
-                            //ctx.Token = ctx.Request.Cookies[JwtConfigurator.JwtCookieName];
+                            if (ctx.Request.Path.HasValue)
+                            {
+                                if (ctx.Request.Path.Value == $"/{nameof(HomeController.FetchLogs)}")
+                                    return Task.CompletedTask;
+                                Log.Information($"Request: [{ctx.Request.Method}] {ctx.Request.Path}");
+                            }
                             return Task.CompletedTask;
                         },
-                        OnAuthenticationFailed = async ctx =>
+                        OnAuthenticationFailed = ctx =>
                         {
-                            
+                            Log.Warning($"Request: [{ ctx.Request.Method}] {ctx.Request.Path} failed: {ctx.Exception.GetErrorMessage()}");
+                            return Task.CompletedTask;
                         },
-                        OnTokenValidated = async ctx =>
+                        OnTokenValidated = ctx =>
                         {
-
+                            Log.Information($"Is authenticated : {ctx.Principal.Identity?.IsAuthenticated ?? false}");
+                            ctx.Principal.Claims.Select(c => $"{c.Type} {c.Value}").ToList().ForEach(Log.Debug);
+                            return Task.CompletedTask;
                         },
-                        OnChallenge = async ctx =>
+                        OnForbidden = ctx =>
                         {
-
-                        },
-                        OnForbidden = async ctx =>
-                        {
-
+                            if (ctx.Result.Succeeded) Log.Information($"Authorized {ctx.Principal?.Identity.Name}");
+                            else Log.Warning($"Authorization failed ({ctx.Principal?.Identity.Name}) : {ctx.Result.Failure?.GetErrorMessage()}");
+                            return Task.CompletedTask;
                         },
                     };
 
@@ -172,9 +179,6 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapDefaultControllerRoute();
-            endpoints.MapPost("/connect/token", 
-                        (HttpContext ctx, JwtConfigurator jwtConfigurator) 
-                            => TokenEndpoint.Connect(ctx, jwtConfigurator));
         });
 
         
