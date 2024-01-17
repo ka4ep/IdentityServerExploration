@@ -6,15 +6,18 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Logging;
+using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System;
 using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
 
 namespace IdentityServer;
@@ -34,18 +37,20 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
 
         var migrationsResolver = new MigrationsResolver(Configuration);
         var jwtConfigurator = new JwtConfigurator(Configuration);
+        services.AddSingleton(jwtConfigurator);
 
         services.AddDbContext<ApplicationDbContext>(migrationsResolver.SqlServerOptions);
         services.AddIdentity<ApplicationUser, IdentityRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
-        services.AddIdentityServer()
+        services.AddIdentityServer()                
                 .AddAspNetIdentity<ApplicationUser>()
                 .AddConfigurationStore(options => options.ConfigureDbContext = migrationsResolver.SqlServerOptions)
                 .AddOperationalStore(options => options.ConfigureDbContext = migrationsResolver.SqlServerOptions)
 #if DEBUG
-                .AddDeveloperSigningCredential()
+                //.AddDeveloperSigningCredential()
+                .AddSigningCredential(new X509Certificate2("epasaule.pfx", "epasaule"))
 #else
                 //.AddSigningCredential
 #endif
@@ -56,7 +61,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         services.AddAuthentication(options =>
                 {
                     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+                    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;                    
                 })
                 .AddJwtBearer(options =>
                 {
@@ -72,28 +77,53 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                         ValidIssuer = jwtConfigurator.JwtIssuer,
                         
                         ValidateIssuerSigningKey = false,
+                        
                         IssuerSigningKey = jwtConfigurator.SigningKey,
+                        IssuerSigningKeys = [jwtConfigurator.SigningKey],
 
                         ValidateAudience = false,
                         ValidAudience = jwtConfigurator.JwtIssuer,
 
                         ValidateLifetime = true,
                         ClockSkew = TimeSpan.FromSeconds(3 * 60),
+
+                        LogValidationExceptions = true,
+                        LogTokenId = true,
+                        
                     };
-/*
+
                     options.Events = new JwtBearerEvents
                     {
                         OnMessageReceived = ctx =>
                         {
                             Log.Information($"Requst: [{ctx.Request.Method}] {ctx.Request.Path}");
-                            ctx.Token = ctx.Request.Cookies[JwtConfigurator.JwtCookieName];
+                            //ctx.Token = ctx.Request.Cookies[JwtConfigurator.JwtCookieName];
                             return Task.CompletedTask;
-                        },                        
+                        },
+                        OnAuthenticationFailed = async ctx =>
+                        {
+                            
+                        },
+                        OnTokenValidated = async ctx =>
+                        {
+
+                        },
+                        OnChallenge = async ctx =>
+                        {
+
+                        },
+                        OnForbidden = async ctx =>
+                        {
+
+                        },
                     };
-*/
+
                     
                 });
-
+        services.AddAuthorization(options =>
+        {
+            
+        });
         services.AddSingleton<HostAddressService>();
 
         /*
@@ -120,6 +150,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         else Log.Information($"Host address is {hostAddress}");
 
         MigrationsResolver.MigrateDatabaseAsync(host).GetAwaiter().GetResult();
+        MigrationsResolver.PrepareDataAsync(host).GetAwaiter().GetResult();
 
         if (Environment.IsDevelopment())
         {
@@ -141,6 +172,12 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         app.UseEndpoints(endpoints =>
         {
             endpoints.MapDefaultControllerRoute();
+            endpoints.MapPost("/connect/token", 
+                        (HttpContext ctx, JwtConfigurator jwtConfigurator) 
+                            => TokenEndpoint.Connect(ctx, jwtConfigurator));
         });
+
+        
     }
+
 }

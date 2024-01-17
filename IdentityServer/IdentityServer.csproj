@@ -138,10 +138,13 @@
   </ItemGroup>
   
   <ItemGroup>
-    <Folder Include="Data\Migrations\IdentityServer\" />
+    <Folder Include="Data\Migrations\IdentityServer\ApplicationDb\" />
   </ItemGroup>
   
   <ItemGroup>
+    <None Update="epasaule.pfx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="SmartLynx.pfx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

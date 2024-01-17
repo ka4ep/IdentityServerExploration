@@ -1,6 +1,8 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using IdentityServer4.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.DependencyInjection;
 using System.Threading.Tasks;
 
 namespace IdentityServer.Controllers;
@@ -15,10 +17,14 @@ public class RedirectController : ControllerBase
         return Results.Ok();
     }
 
-    [AllowAnonymous]
+
+    [Authorize]
     [HttpGet("Test")]
     public async Task<IActionResult> Test()
     {
+        var rts = this.HttpContext.RequestServices.GetService<IRefreshTokenService>();
+
+
         await Response.WriteAsJsonAsync($"{{ \"Test\": \"Successful\" }}");
         return new EmptyResult();
     }
