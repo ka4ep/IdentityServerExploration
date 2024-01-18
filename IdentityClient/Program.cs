@@ -48,7 +48,10 @@ public static class Program
                     new ServerConnection.Realms(["api1"], [], []));
             Console.WriteLine(response);
 
-            var adminResponse1 = await passwordBasedConnection.CallGetMethodAsync("/api/Example/AdminOnly", null, new ServerConnection.Realms([], [], []));
+            var adminResponse1 = await passwordBasedConnection.CallGetMethodAsync(
+                    "/api/Example/AdminOnly", 
+                    content: null, 
+                    new ServerConnection.Realms(["api1"], [], ["admin"]));
 
         }
         catch (Exception ex)

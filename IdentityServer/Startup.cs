@@ -3,20 +3,25 @@ using IdentityServer.Controllers;
 using IdentityServer.Data;
 using IdentityServer.Helpers;
 using IdentityServer.Services;
+using IdentityServer4.Configuration;
+using IdentityServer4.EntityFramework.DbContexts;
+using IdentityServer4.EntityFramework.Storage;
+using IdentityServer4.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
-using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Logging;
-using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
@@ -35,13 +40,18 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         services.AddEndpointsApiExplorer();
         services.AddSwaggerGen();
 
+        
+        services.AddOptions();
+        services.AddOptionsWithValidateOnStart<IdentityServerConfigurationOptions>().BindConfiguration(MigrationsResolver.IdentityServerKey);
 
         var migrationsResolver = new MigrationsResolver(Configuration);
         var jwtConfigurator = new JwtConfigurator(Configuration);
         services.AddSingleton(jwtConfigurator);
 
+
         services.AddDbContext<ApplicationDbContext>(migrationsResolver.SqlServerOptions);
-        services.AddIdentity<ApplicationUser, IdentityRole>()
+        
+        services.AddIdentity<ApplicationUser, ApplicationRole>()
                 .AddEntityFrameworkStores<ApplicationDbContext>()
                 .AddDefaultTokenProviders();
 
@@ -56,9 +66,9 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                 //.AddSigningCredential
 #endif
                 ;
+        
 
-        services.AddTransient<ICookieManager, ChunkingCookieManager>();
-
+        JwtSecurityTokenHandler.DefaultInboundClaimTypeMap.Clear();
         services.AddAuthentication(options =>
                 {
                     options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
@@ -118,8 +128,7 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                         },
                         OnForbidden = ctx =>
                         {
-                            if (ctx.Result.Succeeded) Log.Information($"Authorized {ctx.Principal?.Identity.Name}");
-                            else Log.Warning($"Authorization failed ({ctx.Principal?.Identity.Name}) : {ctx.Result.Failure?.GetErrorMessage()}");
+                            Log.Warning($"Authorization failed [{(int)ctx.Response.StatusCode}] {ctx.Principal?.Identity.Name}");
                             return Task.CompletedTask;
                         },
                     };
@@ -128,23 +137,13 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                 });
         services.AddAuthorization(options =>
         {
-            
+            //
         });
+
+        services.AddScoped<IProfileService, ProfileService>();
+        services.AddTransient<ICookieManager, ChunkingCookieManager>();
         services.AddSingleton<HostAddressService>();
 
-        /*
-        var builder = services.AddIdentityServer(options =>
-        {
-            // see https://identityserver4.readthedocs.io/en/latest/topics/resources.html
-            options.EmitStaticAudienceClaim = true;
-        })
-            .AddInMemoryIdentityResources(Config.IdentityResources)
-            .AddInMemoryApiScopes(Config.ApiScopes)
-            .AddInMemoryClients(Config.Clients);
-
-        // not recommended for production - you need to store your key material somewhere secure
-        builder.AddDeveloperSigningCredential();
-        */
     }
 
     public void Configure(IApplicationBuilder app, IHost host)
@@ -156,13 +155,18 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         else Log.Information($"Host address is {hostAddress}");
 
         MigrationsResolver.MigrateDatabaseAsync(host).GetAwaiter().GetResult();
-        MigrationsResolver.PrepareDataAsync(host).GetAwaiter().GetResult();
+
+        app.UseForwardedHeaders(new ForwardedHeadersOptions
+        {
+            ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto
+        });
 
         if (Environment.IsDevelopment())
         {
             app.UseSwagger();
             app.UseSwaggerUI();
-            app.UseDeveloperExceptionPage();            
+            app.UseDeveloperExceptionPage();
+            Seed.PrepareDataAsync(host).GetAwaiter().GetResult();
         }
         
 

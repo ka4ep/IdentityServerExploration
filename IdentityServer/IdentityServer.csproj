@@ -151,6 +151,8 @@
   
   <ItemGroup>
     <Folder Include="Data\Migrations\IdentityServer\ApplicationDb\" />
+    <Folder Include="Data\Migrations\IdentityServer\ConfigurationDb\" />
+    <Folder Include="Data\Migrations\IdentityServer\PersistedGrantDb\" />
   </ItemGroup>
   
   <ItemGroup>

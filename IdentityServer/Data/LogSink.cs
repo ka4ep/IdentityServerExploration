@@ -64,7 +64,7 @@ public class LogSink
         {
             return Capitalize(logLevel ?? string.Empty) switch
             {
-                "Fatal" or nameof(LogLevel.Critical) => (Color.RebeccaPurple, Color.Purple),
+                "Fatal" or nameof(LogLevel.Critical) => (Color.RebeccaPurple, Color.LightCyan),
                 nameof(LogLevel.Error) => (Color.Red, Color.Red),
                 nameof(LogLevel.Warning) => (Color.DarkOliveGreen, Color.Yellow),
                 nameof(LogLevel.Information) => (Color.Black, Color.White),

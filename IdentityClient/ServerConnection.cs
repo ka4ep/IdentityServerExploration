@@ -1,13 +1,5 @@
 ﻿using IdentityModel.Client;
-using Newtonsoft.Json.Linq;
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net.Http.Headers;
-using System.Net.Http.Json;
-using System.Text;
-using System.Threading.Tasks;
-using static IdentityClient.ServerConnection;
 
 namespace IdentityClient;
 

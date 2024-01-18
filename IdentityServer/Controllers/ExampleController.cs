@@ -23,13 +23,11 @@ public class ExampleController : ControllerBase
     [HttpGet(nameof(Test))]
     public async Task<IActionResult> Test()
     {
-        var rts = this.HttpContext.RequestServices.GetService<IRefreshTokenService>();
-
         await Response.WriteAsJsonAsync($"{{ \"Test\": \"Successful\" }}");
         return new EmptyResult();
     }
 
-    [Authorize(Policy = "Admin")]
+    [Authorize(Roles = "Admin")]
     [HttpGet(nameof(AdminOnly))]
     public async Task<IActionResult> AdminOnly()
     {
@@ -37,8 +35,7 @@ public class ExampleController : ControllerBase
         return new EmptyResult();
     }
 
-    [Authorize(Policy = "Admin")]
-    [Authorize(Policy = "Invoice")]
+    [Authorize(Roles = "Admin invoice.read invoice.write")]
     [HttpGet(nameof(AdminAndInvoiceOnly))]
     public async Task<IActionResult> AdminAndInvoiceOnly()
     {
