@@ -36,9 +36,11 @@ public static class Config
             ClientId = "Test",
             ClientName = "Test Client",
             ClientSecrets = [new Secret("CACEBCF1-DA16-44A9-9ADD-9D453AA716CF".Sha256(), "Random client secret")],
+            RequireClientSecret = false,
+            RequirePkce = true,
             AllowedGrantTypes = GrantTypes.ResourceOwnerPassword,
             AllowAccessTokensViaBrowser = true,
-            RequireClientSecret = true,
+            
             AlwaysSendClientClaims = true,
             // от этой настройки зависит размер токена, 
             // при false можно получить недостающую информацию через UserInfo endpoint

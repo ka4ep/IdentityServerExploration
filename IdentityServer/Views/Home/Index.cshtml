@@ -41,7 +41,10 @@
     <span class="container" id="logcontainer">
     </span>
 
-
+    @if (Environment.GetEnvironmentVariable("__ASPNETCORE_BROWSER_TOOLS") is not null)
+    {
+        <script src="/_framework/aspnetcore-browser-refresh.js"></script>
+    }
     <script type="text/javascript" src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
     <script type="text/javascript">
         console.debug('LOAD');

@@ -106,7 +106,7 @@ public class ServerConnection
 
                 using var response = await httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead);
                 if (response.IsSuccessStatusCode) return await response.Content.ReadAsStringAsync();
-                throw new Exception($"[{(int)response.StatusCode}] {response.StatusCode:G}{Environment.NewLine}{response.Headers.Select(h => $"[{h.Key}] : {string.Join(" ; ", h.Value)}")}");
+                throw new Exception($"[{(int)response.StatusCode}] {response.StatusCode:G}{Environment.NewLine}{string.Join(Environment.NewLine, response.Headers.Select(h => $"[{h.Key}] : {string.Join(" ; ", h.Value)}"))}");
             }
 
 

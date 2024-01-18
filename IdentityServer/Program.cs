@@ -20,6 +20,7 @@ public static class Program
             .MinimumLevel.Override("System", LogEventLevel.Warning)
             .MinimumLevel.Override("Microsoft.AspNetCore.Authentication", LogEventLevel.Verbose)
             .MinimumLevel.Override("Microsoft.AspNetCore.Authentication.JwtBearer", LogEventLevel.Information)
+            .MinimumLevel.Override("Microsoft.WebTools.BrowserLink.Net.BrowserLinkMiddleware", LogEventLevel.Error)
             .Enrich.FromLogContext()
             // uncomment to write to Azure diagnostics stream
             //.WriteTo.File(

@@ -9,7 +9,7 @@ namespace IdentityServer.Controllers;
 
 [Route("api/[controller]")]
 [ApiController]
-public class RedirectController : ControllerBase
+public class ExampleController : ControllerBase
 {
     [HttpPost("Get")]
     public async Task<IActionResult> Get(string data)

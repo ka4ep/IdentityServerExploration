@@ -28,20 +28,28 @@ public static class Program
             //
             // Since our client 'Test' allows 'profile' scope, the result is more verbose:
             // {"sub":"ad111111-3986-4980-6301-283888811531","preferred_username":"admin@nonsense.com","name":"admin@nonsense.com"}
+            // Allowed scopes for userinfo are:
+            // sub name family_name given_name middle_name nickname preferred_username profile picture website gender birthdate zoneinfo locale updated_at
             //
             // Scope 'admin' will be required later... TODO
 
             var passwordBasedConnection = await discoverableConnection.RequestPasswordTokenAsync(
-                    new ServerConnection.ClientInfo("Test", "CACEBCF1-DA16-44A9-9ADD-9D453AA716CF", "openid profile"),
+                    new ServerConnection.ClientInfo("Test", "" /*"CACEBCF1-DA16-44A9-9ADD-9D453AA716CF"*/, "openid profile"),
                     new ServerConnection.ClientCredentials("admin@nonsense.com", "Qwerty1234!")
                     );
+
             var userInfo = await passwordBasedConnection.GetUserInfo();
             Console.WriteLine(userInfo);
+
+
             var response = await passwordBasedConnection.CallGetMethodAsync(
-                    "/api/Redirect/Test",
+                    "/api/Example/Test",
                     content: null,
                     new ServerConnection.Realms(["api1"], [], []));
             Console.WriteLine(response);
+
+            var adminResponse1 = await passwordBasedConnection.CallGetMethodAsync("/api/Example/AdminOnly", null, new ServerConnection.Realms([], [], []));
+
         }
         catch (Exception ex)
         {

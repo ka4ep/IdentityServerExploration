@@ -17,7 +17,6 @@ using Microsoft.IdentityModel.Logging;
 using Microsoft.IdentityModel.Tokens;
 using Serilog;
 using System;
-using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
 using System.Security.Cryptography.X509Certificates;
 using System.Threading.Tasks;
@@ -163,9 +162,9 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         {
             app.UseSwagger();
             app.UseSwaggerUI();
-            app.UseDeveloperExceptionPage();
+            app.UseDeveloperExceptionPage();            
         }
-
+        
 
         app.UseHttpsRedirection();
         app.UseStaticFiles();
