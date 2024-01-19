@@ -144,15 +144,11 @@ Below is a list that could be simply copied into your new server project to save
 
 </details>
 
----
-
-Actually, for a small project you may use in-memory *IdentityServer* and have it's contents populated from hard-coded values or even *appsettings.json* which we will use later.
-
-But the big daddies go for the database...
-
 ## Entity Framework Core
 
+Actually, for a small project you may use in-memory *IdentityServer* and have it's contents populated from hard-coded values or even *appsettings.json* which will be shown later.
 
+But the big daddies go for the database...
 
 ### Database models and contexts
 
@@ -165,7 +161,7 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 ```
 <sup>Note a .NET8 C#12 primary constructor feature used in ApplicationDbContext class. We won't override anything and may keep it a one-liner. Sweet!</sup>
 
-Having defined *ApplicationDbContext* we need to mention another two required database context classes that come from *IdentityServer4.EntityFramework.DbContexts* namespace: **ConfigurationDbContext** and **PersistedGrantDbContext**. Normally we don't need anything extra using those, but just to get ahead of future problems with database migration it's good to define design-time factories for those. It seems there are no problems migrating these having just started writing application code. But if we decide to go from scratch half-way to production server, we'll get a number of exceptions. One of them is a lack of parameter-less constructor that expects some options to be passed in. So, we may want to implement **IDesignTimeDbContextFactory<TDbContext>** interface which will help to pass *DbContextOptions<TDbContext>* into *DbContext* constructor. During *external* migration we'd have only a liited amount of services available. Since we want to define our database connection string in *appsettings.json* file, we need to configure reading from it. I've defined one factory myself, but to make life easier with *ConfigurationDbContext* and *PersistedGrantDbContext* I've found a base class somewhere on the internet:
+Having defined *ApplicationDbContext* we need to mention another two required database context classes that come from *IdentityServer4.EntityFramework.DbContexts* namespace: **ConfigurationDbContext** and **PersistedGrantDbContext**. Normally we don't need anything extra using theese, but just to get ahead of future problems with database migration, it's good to define design-time factories for aforementioned database contexts. It seems there are no problems migrating these having just started writing application code. But if we decide to reset everything on a half-way to a live production server, we'll get a number of exceptions. One of them is a lack of parameter-less constructor that expects some options to be passed in. So, we may want to implement **IDesignTimeDbContextFactory<TDbContext>** interface which will help to pass *DbContextOptions<TDbContext>* into *DbContext* constructor. During *external* migration we'd have only a small amount of services available in *IServiceProvider*. Since we want to define our database connection string in *appsettings.json* file, we need to help reading from it. I've defined one factory myself, but to make life easier with *ConfigurationDbContext* and *PersistedGrantDbContext* I've found a base class somewhere on the internet:
 
 <details>
   <summary>DesignTimeDbContextFactoryBase</summary>
@@ -226,16 +222,61 @@ public abstract class DesignTimeDbContextFactoryBase<TContext> : IDesignTimeDbCo
 ```
 </details>
 
+<details>
+  <summary>This is how factory classes look now</summary>
+
+```
+public class DesignTimeContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
+{
+    public ApplicationDbContext CreateDbContext(string[] args)
+    {
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddJsonFile("appsettings.json");
+        var configuration = configBuilder.Build();
+        var resolver = new MigrationsResolver(configuration);
+        var builder = new DbContextOptionsBuilder<ApplicationDbContext>();
+        resolver.SqlServerOptions(builder);
+        return new ApplicationDbContext(builder.Options);
+    }
+}
+
+public class ConfigurationContextDesignTimeFactory : DesignTimeDbContextFactoryBase<ConfigurationDbContext>
+{
+    public ConfigurationContextDesignTimeFactory() : base(MigrationsResolver.ConnectionKey, typeof(Startup).GetTypeInfo().Assembly.GetName().Name)
+    {
+    }
+
+    protected override ConfigurationDbContext CreateNewInstance(DbContextOptions<ConfigurationDbContext> options)
+    {
+        return new ConfigurationDbContext(options, new ConfigurationStoreOptions());
+    }
+}
+
+public class PersistedGrantContextDesignTimeFactory : DesignTimeDbContextFactoryBase<PersistedGrantDbContext>
+{
+    public PersistedGrantContextDesignTimeFactory() : base(MigrationsResolver.ConnectionKey, typeof(Startup).GetTypeInfo().Assembly.GetName().Name)
+    {
+    }
+
+    protected override PersistedGrantDbContext CreateNewInstance(DbContextOptions<PersistedGrantDbContext> options)
+    {
+        return new PersistedGrantDbContext(options, new OperationalStoreOptions());
+    }
+}
+// MigrationsResolver.ConnectionKey is section string 'DefaultConnection'
+```  
+</details>
+
 ### External database migration
 
 Let's prepare a database migration (changes list, rollback list) and actually update the database to have our tables created along with **Id** columns being of type **Guid** we defined earlier.
 
 ```
 dotnet ef migrations add InitialIdentityServerApplicationDbMigration -c ApplicationDbContext -o Data/Migrations/IdentityServer/ApplicationDb
-dotnet ef database update --context ApplicationDbContext
 dotnet ef migrations add InitialIdentityServerConfigurationDbMigration -c ConfigurationDbContext -o Data/Migrations/IdentityServer/ConfigurationDb
-dotnet ef database update --context ConfigurationDbContext
 dotnet ef migrations add InitialIdentityServerPersistedGrantDbMigration -c PersistedGrantDbContext -o Data/Migrations/IdentityServer/PersistedGrantDb
+dotnet ef database update --context ApplicationDbContext
+dotnet ef database update --context ConfigurationDbContext
 dotnet ef database update --context PersistedGrantDbContext
 ```
 Now we should have 30 *IdentityServer* tables created for us plus *_EFMigrationsHistory*.
@@ -250,28 +291,28 @@ Although we may create certificates at any time, let's just get over with it now
 ```
 * Change Windows version *22621* to any that's in your 'Kits' directory.
 * I'm not sure if *CN=localhost* is important here. Probably. I have no problems since I host my server on https://localhost:5001
-* Don't forget, yet don't disclose your password!
+* Your password will go along the certificate path in configuration.
 
 # Configuration
 
-## Startup.cs
+### Startup.cs
 
 Yes, It's a legacy way to set up things and I got it from *IdentityServer* template. Didn't bother to swap for top-level statements in *Program.cs*.
 
-I've tried to keep the most settings in **appsettings.json** file so that we wouldn't have to ship a new version for any little change. Basically, we tell *IdentityServer* that we want to use *EntityFrameworkCore* with say SqlServer and the same database, and migrations are there too. Note, that we don't use *.AddDeveloperSigningCredential()* even for debugging. We use our created certificate and read it's path and password from *appsettings.json*. Our helper class *JwtConfigurator* does the same. Reusable constants help us to get rid of error-prone hard-coded strings. If we mistake, then it's only done in one place :) 
+I've tried to keep the most settings in **appsettings.json** file so that we wouldn't have to ship a new version for any little change. Basically, we tell *IdentityServer* that we want to use *EntityFrameworkCore* with, say *SqlServer* and the same database, and migrations are there too. Note, that we don't use *.AddDeveloperSigningCredential()* even for debugging purposes. Instead, we use our newly created certificate and read it's path and password from *appsettings.json* *Jwt* section. Our helper class *JwtConfigurator* does the same. Class *JwtConfiguratorOptions* holds settings for *TokenValidationParameters* in *AddJwtBearer* method.
 
-TokenValidationParameters could be read from *appsettings.json* too, I'll try it later.
+The one really **important** scope registered class is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where the magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging.
 
-## Program.cs quickie
+### Program.cs
 
-The only thing worth mentioning is I override *Serilog* settings for particular namespaces that clutter my logs and that I can't resolve for now (or package developers will do one day).
+The only thing worth mentioning is I override *Serilog* settings for particular namespaces that unclutter my logs of warnings - some stuff that I can't resolve for now (or package developers will fix back one day).
 
-## appsettings.json
+### appsettings.json
 
-Being mentioned so many times, we haven't looked in it yet.
+Being mentioned so many times, we haven't looked in it yet. Let's do so:
 
 <details>
-  <summary></summary>
+  <summary>appsettings.json</summary>
 
 ```
 {
@@ -285,10 +326,18 @@ Being mentioned so many times, we haven't looked in it yet.
     "DefaultConnection": "Server=DOOM\\DOOM;Database=IdentityDb;Trusted_Connection=True;MultipleActiveResultSets=true;Encrypt=No"
   },
   "Jwt": {
-    "Issuer": "https://localhost:5001",
-    "TokenLifespan": 1800,
     "CertificatePath": "epasaule.pfx",
-    "CertificatePassword": "epasaule"
+    "CertificatePass": "epasaule",
+
+    "ValidIssuer": "https://localhost:5001",
+    "ValidateIssuer": false,
+    "ValidateIssuerSigningKey": false,
+
+    "ValidAudience": "https://localhost:5001",
+    "ValidateAudience": false,
+
+    "TokenLifespan": 1800,
+    "ValidateTokenLifespan": false
   },
   "Kestrel": {
     "Endpoints": {
@@ -337,7 +386,7 @@ Being mentioned so many times, we haven't looked in it yet.
           },
           {
             "RedirectUri": "https://localhost:5001/callback-silent.html"
-          }          
+          }
         ],
         "PostLogoutRedirectUris": [
           {
@@ -349,34 +398,14 @@ Being mentioned so many times, we haven't looked in it yet.
             "Scope": "openid"
           },
           {
+            "Scope": "roles"
+          },
+          {
             "Scope": "profile"
-          },
-          {
-            "Scope": "api1"
-          },
-          {
-            "Scope": "roles"
-          }
-        ]
-      }
-    ],
-    "ApiScopes": [
-      {
-        "Name": "roles2"
-      }
-    ],
-    "ApiResources": [
-      {
-        "Name": "api1",
-        "Scopes": [
-          {
-            "Scope": "roles"
-          }
-        ],
-        "UserClaims": [
-          {
-            "Type": "role"
-          }
+          }//,
+          //{
+          //  "Scope": "api1"
+          //}
         ]
       }
     ],
@@ -393,8 +422,56 @@ Being mentioned so many times, we haven't looked in it yet.
       {
         "Name": "roles"
       }
-    ]
+    ]//,
+    //"ApiScopes": [
+    //  {
+    //    "Name": "roles2"
+    //  }
+    //],
+    //"ApiResources": [
+    //  {
+    //    "Name": "api1",
+    //    "Scopes": [
+    //      {
+    //        "Scope": "roles"
+    //      }
+    //    ],
+    //    "UserClaims": [
+    //      {
+    //        "Type": "role"
+    //      }
+    //    ]
+    //  }
+    //]
   }
 }
 ```  
 </details>
+
+We have **ConnectionStrings.DefaultConnection** for our database. There is 'original' **Kestrel** section for which we can find some information on the internet and tune however we want. Plus, endpoint address is there too - we'll want to use it in other sections.
+
+Next, **Jwt** section is of C# type **JwtConfiguratorOptions**. it defines what certificate we use, what happens with all (some, actually) validations we may require. *CertificatePath* and *CertificatePass* (for password) are crucial for our server. That **IssuerSigningKey**(-s) can be of a *SymmetricSecurityKey* type, but whatever I've tried, internally it gets validated against *RsaSecurityKey* and fails. Error says something like *kid/KeyId* are not found or incorrect, even if I've explicitly defined one! The only option left is to use *RsaSecurityKey*. No problem with that so far.
+
+Moving on to **IdentityServerAccess** section. It corresponds to our *IdentityServerConfigurationOptions* class with lists of original models from *IdentityServer4.EntityFramework.Entities* namespace. That's why some arrays look that ugly: objects have a few properties, but only the ones I've put are required. Again, we may consider rolling our own classes, or may be just use models from *IdentityServer4.Models* namespace and then convert them using *.ToEntity()* extension methods. Any approach will do.
+
+# Identity Server
+
+Let's discuss and try to understand, what parts of the *IdentityServer* configuration is required for role-based web login/password driven authorization.
+### IdentityResources
+
+It's a list of scope keywords that server is happy to accept if authenticated user would call /connect/userinfo and pass his access token (along with scope keywords). Scope `openid` is *mandatory* to match user by id with the one in the database. Keywords
+* *sub name family_name given_name middle_name nickname preferred_username profile picture website gender birthdate zoneinfo locale updated_at*
+are optional.
+
+### ApiScopes
+
+Doesn't seem to be used in our role-based password flow. I had an error saying ApiScope 'roles' cannot be the same as some other scopes. I can't reproduce it, but just beware...
+
+### ApiResources
+
+Same story here - doesn't seem to be used in role-based password flow.
+
+### Clients
+
+This is one of allowed clients - our web-based one. GrantType - password, does not require client secret (it's opaque in sources via browser dev console), require PKCE. We don't use *offline access* to feedle around with refresh tokens. We don't yet use redirect uri, nor post logout redirect uri. What is interesting - *allowed scopes*. Obviously, we allow *openid*, we want *profile* too.
+Now, there's hickup I'll try to diagnose and resolve. Controller method, as we think, should have [Authorize(Roles = "one two")]. This means, user requires *both* roles to be present, not *any of*.
