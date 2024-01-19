@@ -43,9 +43,8 @@ internal static class Seed
                 Email = "admin@nonsense.com"
             };
             await RegisterUserIfNotExists(userManager, user, "Qwerty1234!");
-            //await userManager.AddClaimAsync(user, new Claim("role", "admin"));
             await userManager.AddToRoleAsync(user, "admin");
-
+            await userManager.AddToRoleAsync(user, "viewer");
         }
         {
             var user = new ApplicationUser
@@ -55,7 +54,7 @@ internal static class Seed
                 Email = "viewer@nonsense.com"
             };
             await RegisterUserIfNotExists(userManager, user, "Qwerty1234!");
-            await userManager.AddClaimAsync(user, new Claim("role", "viewer"));
+            await userManager.AddToRoleAsync(user, "viewer");
         }
     }
 

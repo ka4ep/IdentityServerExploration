@@ -35,7 +35,8 @@ public class ExampleController : ControllerBase
         return new EmptyResult();
     }
 
-    [Authorize(Roles = "Admin invoice.read invoice.write")]
+    
+    [Authorize(Roles = "viewer")]
     [HttpGet(nameof(AdminAndInvoiceOnly))]
     public async Task<IActionResult> AdminAndInvoiceOnly()
     {

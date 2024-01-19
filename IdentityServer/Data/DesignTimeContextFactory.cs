@@ -23,8 +23,7 @@ public class DesignTimeContextFactory : IDesignTimeDbContextFactory<ApplicationD
 
 public class ConfigurationContextDesignTimeFactory : DesignTimeDbContextFactoryBase<ConfigurationDbContext>
 {
-    public ConfigurationContextDesignTimeFactory()
-        : base(MigrationsResolver.ConnectionKey, typeof(Startup).GetTypeInfo().Assembly.GetName().Name)
+    public ConfigurationContextDesignTimeFactory() : base(MigrationsResolver.ConnectionKey, typeof(Startup).GetTypeInfo().Assembly.GetName().Name)
     {
     }
 
@@ -36,8 +35,7 @@ public class ConfigurationContextDesignTimeFactory : DesignTimeDbContextFactoryB
 
 public class PersistedGrantContextDesignTimeFactory : DesignTimeDbContextFactoryBase<PersistedGrantDbContext>
 {
-    public PersistedGrantContextDesignTimeFactory()
-        : base(MigrationsResolver.ConnectionKey, typeof(Startup).GetTypeInfo().Assembly.GetName().Name)
+    public PersistedGrantContextDesignTimeFactory() : base(MigrationsResolver.ConnectionKey, typeof(Startup).GetTypeInfo().Assembly.GetName().Name)
     {
     }
 

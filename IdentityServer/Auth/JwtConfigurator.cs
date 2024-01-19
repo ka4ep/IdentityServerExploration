@@ -1,22 +1,15 @@
 ﻿using Microsoft.AspNetCore.Authentication;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Tokens;
-using System;
 using System.Security.Cryptography.X509Certificates;
 
 namespace IdentityServer.Auth;
 
 public class JwtConfigurator
 {
-    //public const string JwtCookieName = "JwtCookie";
-
     public const string JwtSection = "Jwt";
 
     public SecurityKey SigningKey { get; }
-
     internal X509Certificate2 RSA { get; }
-
     internal JwtConfiguratorOptions Options { get; }
 
     public JwtConfigurator(JwtConfiguratorOptions options)
@@ -30,9 +23,20 @@ public class JwtConfigurator
 
         SigningKey = new RsaSecurityKey(RSA.GetRSAPrivateKey());
 
-        //SigningKey = new(Encoding.Unicode.GetBytes(JwtKey));// { KeyId = "B24B4A5B2F399C56B5BD98E1ED26C4A3" };
+        // SymmetricSecurityKey:
+        // SigningKey = new(Encoding.Unicode.GetBytes(JwtKey));// { KeyId = "B24B4A5B2F399C56B5BD98E1ED26C4A3" };
+        // Even with explicitly KeyId defined, it will be checked against RsaSecurityKey and will fail.
     }
 }
+
+
+
+
+
+
+
+
+
 
 
 
