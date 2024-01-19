@@ -386,7 +386,7 @@ Being mentioned so many times, we haven't looked in it yet. Let's do so:
           },
           {
             "RedirectUri": "https://localhost:5001/callback-silent.html"
-          }          
+          }
         ],
         "PostLogoutRedirectUris": [
           {
@@ -398,34 +398,14 @@ Being mentioned so many times, we haven't looked in it yet. Let's do so:
             "Scope": "openid"
           },
           {
+            "Scope": "roles"
+          },
+          {
             "Scope": "profile"
-          },
-          {
-            "Scope": "api1"
-          },
-          {
-            "Scope": "roles"
-          }
-        ]
-      }
-    ],
-    "ApiScopes": [
-      {
-        "Name": "roles2"
-      }
-    ],
-    "ApiResources": [
-      {
-        "Name": "api1",
-        "Scopes": [
-          {
-            "Scope": "roles"
-          }
-        ],
-        "UserClaims": [
-          {
-            "Type": "role"
-          }
+          }//,
+          //{
+          //  "Scope": "api1"
+          //}
         ]
       }
     ],
@@ -442,7 +422,27 @@ Being mentioned so many times, we haven't looked in it yet. Let's do so:
       {
         "Name": "roles"
       }
-    ]
+    ]//,
+    //"ApiScopes": [
+    //  {
+    //    "Name": "roles2"
+    //  }
+    //],
+    //"ApiResources": [
+    //  {
+    //    "Name": "api1",
+    //    "Scopes": [
+    //      {
+    //        "Scope": "roles"
+    //      }
+    //    ],
+    //    "UserClaims": [
+    //      {
+    //        "Type": "role"
+    //      }
+    //    ]
+    //  }
+    //]
   }
 }
 ```  
@@ -452,5 +452,26 @@ We have **ConnectionStrings.DefaultConnection** for our database. There is 'orig
 
 Next, **Jwt** section is of C# type **JwtConfiguratorOptions**. it defines what certificate we use, what happens with all (some, actually) validations we may require. *CertificatePath* and *CertificatePass* (for password) are crucial for our server. That **IssuerSigningKey**(-s) can be of a *SymmetricSecurityKey* type, but whatever I've tried, internally it gets validated against *RsaSecurityKey* and fails. Error says something like *kid/KeyId* are not found or incorrect, even if I've explicitly defined one! The only option left is to use *RsaSecurityKey*. No problem with that so far.
 
-Moving on to **IdentityServerAccess** section. It corresponds to our *IdentityServerConfigurationOptions* class with lists of original models from *IdentityServer4.EntityFramework.Entities* namespace. That's why some arrays look that ugly: objects have a few properties, but only the ones I've put are required. Again, we may consider rolling our own classes, or may be just use models from *IdentityServer4.Models* namespace and then convert them using *.ToEntity* extension methods. Any approach will do.
+Moving on to **IdentityServerAccess** section. It corresponds to our *IdentityServerConfigurationOptions* class with lists of original models from *IdentityServer4.EntityFramework.Entities* namespace. That's why some arrays look that ugly: objects have a few properties, but only the ones I've put are required. Again, we may consider rolling our own classes, or may be just use models from *IdentityServer4.Models* namespace and then convert them using *.ToEntity()* extension methods. Any approach will do.
 
+# Identity Server
+
+Let's discuss and try to understand, what parts of the *IdentityServer* configuration is required for role-based web login/password driven authorization.
+### IdentityResources
+
+It's a list of scope keywords that server is happy to accept if authenticated user would call /connect/userinfo and pass his access token (along with scope keywords). Scope `openid` is *mandatory* to match user by id with the one in the database. Keywords
+* *sub name family_name given_name middle_name nickname preferred_username profile picture website gender birthdate zoneinfo locale updated_at*
+are optional.
+
+### ApiScopes
+
+Doesn't seem to be used in our role-based password flow. I had an error saying ApiScope 'roles' cannot be the same as some other scopes. I can't reproduce it, but just beware...
+
+### ApiResources
+
+Same story here - doesn't seem to be used in role-based password flow.
+
+### Clients
+
+This is one of allowed clients - our web-based one. GrantType - password, does not require client secret (it's opaque in sources via browser dev console), require PKCE. We don't use *offline access* to feedle around with refresh tokens. We don't yet use redirect uri, nor post logout redirect uri. What is interesting - *allowed scopes*. Obviously, we allow *openid*, we want *profile* too.
+Now, there's hickup I'll try to diagnose and resolve. Controller method, as we think, should have [Authorize(Roles = "one two")]. This means, user requires *both* roles to be present, not *any of*.
