@@ -301,7 +301,9 @@ Yes, It's a legacy way to set up things and I got it from *IdentityServer* templ
 
 I've tried to keep the most settings in **appsettings.json** file so that we wouldn't have to ship a new version for any little change. Basically, we tell *IdentityServer* that we want to use *EntityFrameworkCore* with, say *SqlServer* and the same database, and migrations are there too. Note, that we don't use *.AddDeveloperSigningCredential()* even for debugging purposes. Instead, we use our newly created certificate and read it's path and password from *appsettings.json* *Jwt* section. Our helper class *JwtConfigurator* does the same. Class *JwtConfiguratorOptions* holds settings for *TokenValidationParameters* in *AddJwtBearer* method.
 
-The one really **important** scope registered class is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where the magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging.
+Not an **important** scope registered class - this is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where sort of magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging.
+
+There's an **.AddAuthorizationBuilder()** call with a bunch of stuff, that's really important. But we'll get there later.
 
 ### Program.cs
 
@@ -474,4 +476,175 @@ Same story here - doesn't seem to be used in role-based password flow.
 ### Clients
 
 This is one of allowed clients - our web-based one. GrantType - password, does not require client secret (it's opaque in sources via browser dev console), require PKCE. We don't use *offline access* to feedle around with refresh tokens. We don't yet use redirect uri, nor post logout redirect uri. What is interesting - *allowed scopes*. Obviously, we allow *openid*, we want *profile* too.
-Now, there's hickup I'll try to diagnose and resolve. Controller method, as we think, should have [Authorize(Roles = "one two")]. This means, user requires *both* roles to be present, not *any of*.
+
+## What about the users?
+
+Basic user config is actually quite simple. We need and *Id* of type *Guid* (remember [Database models and contexts] section?), *UserName*, maybe *Email*. We register them providing password that will be hashed and salted in the database. We as well add roles to users. One day we'll be able to set users' roles from dashboard UI.
+
+<details>
+  <summary>Seed the users just for the tests</summary>
+  
+```
+internal static class Seed
+{
+    internal static async Task SeedWithSampleUsersAsync(UserManager<ApplicationUser> userManager)
+    {
+        foreach (var user in userManager.Users.ToList())
+        {
+            var claims = await userManager.GetClaimsAsync(user);
+            await userManager.RemoveClaimsAsync(user, claims);
+            await userManager.DeleteAsync(user);
+        }
+        {
+            var user = new ApplicationUser
+            {
+                Id = new Guid("AD111111-3986-4980-6301-283888811531"),
+                UserName = "admin@nonsense.com",
+                Email = "admin@nonsense.com"
+            };
+            await RegisterUserIfNotExists(userManager, user, "Qwerty1234!");
+            await userManager.AddToRoleAsync(user, "admin");
+            await userManager.AddToRoleAsync(user, "viewer");
+        }
+        {
+            var user = new ApplicationUser
+            {
+                Id = new Guid("39D706BE-02FA-43BC-A465-46A289FA984A"),
+                UserName = "viewer",
+                Email = "viewer@nonsense.com"
+            };
+            await RegisterUserIfNotExists(userManager, user, "Qwerty1234!");
+            await userManager.AddToRoleAsync(user, "viewer");
+        }
+    }
+
+    public static async Task PrepareDataAsync(IHost host)
+    {
+        using var scope = host.Services.CreateAsyncScope();
+        try
+        {
+            var env = scope.ServiceProvider.GetRequiredService<IHostEnvironment>();
+            if (env.IsDevelopment())
+            {
+                await scope.ServiceProvider.GetRequiredService<ApplicationDbContext>().Database.MigrateAsync();
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<ApplicationUser>>();
+                await SeedWithSampleUsersAsync(userManager);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log.Error($"Data preparation failed : {ex.GetErrorMessage()}");
+        }
+    }
+
+    private static async Task RegisterUserIfNotExists<TUser>(UserManager<TUser> userManager,
+        TUser user, string password)
+        where TUser : ApplicationUser
+    {
+        if (await userManager.FindByNameAsync(user.UserName ?? string.Empty) == null)
+        {
+            var result = await userManager.CreateAsync(user, password);
+            if (result.Succeeded)
+            {
+                var code = await userManager.GenerateEmailConfirmationTokenAsync(user);
+                await userManager.ConfirmEmailAsync(user, code);
+            }
+        }
+    }   
+}
+```  
+</details>
+
+We've got `admin` and `viewer` users.
+
+## Controllers and their methods
+
+We'll test access using an *ExampleController*:
+
+```
+[Route("api/[controller]")]
+[ApiController]
+public class ExampleController : ControllerBase
+{
+    [Authorize]
+    [HttpGet(nameof(Test))]
+    public async Task<IActionResult> Test()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Test\": \"Successful\" }}");
+        return new EmptyResult();
+    }
+
+    [Authorize(Roles = "admin")]
+    [HttpGet(nameof(AdminOnly))]
+    public async Task<IActionResult> AdminOnly()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Administrator\": \"Allowed\" }}");
+        return new EmptyResult();
+    }
+    
+    [Authorize(Roles = "admin viewer")]
+    [HttpGet(nameof(AdminAndInvoiceOnly))]
+    public async Task<IActionResult> AdminAndInvoiceOnly()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Administrator\": \"Allowed\", \"InvoiceOperator\": \"Allowed\" }}");
+        return new EmptyResult();
+    }
+}
+```
+We've put required roles within [Authorize()] attribute. Role names are **case-sensitive**!
+* Method `Test` is accessible by any authenticated user
+* Method `AdminOnly` is accessible by anyone with role `admin`.
+* Method `AdminAndInvoiceOnly` is accessible by... **nobody**.
+
+#### What could possibly go wrong?
+
+Let's see. Controller method, as we think, should have [Authorize(Roles = "admin viewer")]. This means, the user must have **both** roles and not *any of*. Event if we split the attribute into a few having one role each - all of them sum up.
+
+#### Resolution?
+
+Now, **the salt of it all**. My numerous attempts to get sole roles working turned into a pumpkin. It's been said somewhere that role-based authorization is not very practical and it's best to go for policies. Let's redefine attributes for those two methods:
+
+```
+    [Authorize(Policy = "Admin")]
+    [HttpGet(nameof(AdminOnly))]
+    public async Task<IActionResult> AdminOnly()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Administrator\": \"Allowed\" }}");
+        return new EmptyResult();
+    }
+    
+    [Authorize(Policy = "Viewer")]
+    [HttpGet(nameof(AdminAndInvoiceOnly))]
+    public async Task<IActionResult> AdminAndInvoiceOnly()
+    {
+        await Response.WriteAsJsonAsync($"{{ \"Administrator\": \"Allowed\", \"InvoiceOperator\": \"Allowed\" }}");
+        return new EmptyResult();
+    }
+```
+To make these policies work, we have to define them in the `Startup.cs` file:
+
+```
+        services.AddAuthorizationBuilder()
+            .AddPolicy("Admin", policy => policy.RequireRole("admin"))
+            .AddPolicy("Viewer", policy =>
+            {
+                policy.RequireAssertion(ctx => 
+                ctx.User.IsInRole("admin") || ctx.User.IsInRole("viewer"));
+            });
+```
+Now both methods' authorization works as expected, hence the ***or*** within assertion.
+
+#### Future thoughts
+
+Defining hard-coded policies is not very practical in both *Startup.cs* and the *controllers*. Ideally, just as assumption, we could:
+* Utilize *ApiResources* to enlist our controllers and their methods. Possibly, in a dynamic manner on start.
+* We wouldn't use public policies in [Authorize] attributes, may be just technical ones or a single one.
+* We could even create a custom [DatabaseAuthorization] for that. Yeah, naming is hard.
+* Create our custom `ApiPolicies` table with a policy name and a set of permitted roles.
+* `AddAuthorizationBuilder` would have a one/few technical policies defined, but the `AuthorizationPolicyBuilder` would check access against the database.
+* It's best to have a service written just for that, cause we not only will require an UI editor for that, but also a quick API check if this or that resource is available to current logged in user. UI friendly stuff.
+
+## Oh, the calling client
+
+It could be a .NET console app, like the one I've made. For a `password`-flow it's only required to pass a *ClientId*, `openid profile` *scopes*, *login* and *password* to get an *access token*. Then just call your methods including that token and you'll be just fine.
+
