@@ -3,21 +3,18 @@ using IdentityServer.Controllers;
 using IdentityServer.Data;
 using IdentityServer.Helpers;
 using IdentityServer.Services;
-using IdentityServer4.Configuration;
-using IdentityServer4.EntityFramework.DbContexts;
-using IdentityServer4.EntityFramework.Storage;
 using IdentityServer4.Services;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Hosting.Server.Features;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.Logging;
 using Serilog;
 using System;
@@ -43,9 +40,10 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
         
         services.AddOptions();
         services.AddOptionsWithValidateOnStart<IdentityServerConfigurationOptions>().BindConfiguration(MigrationsResolver.IdentityServerKey);
+        services.AddOptionsWithValidateOnStart<JwtConfiguratorOptions>().BindConfiguration(JwtConfigurator.JwtSection);
 
         var migrationsResolver = new MigrationsResolver(Configuration);
-        var jwtConfigurator = new JwtConfigurator(Configuration);
+        var jwtConfigurator = new JwtConfigurator(Configuration.GetSection(JwtConfigurator.JwtSection).Get<JwtConfiguratorOptions>());
         services.AddSingleton(jwtConfigurator);
 
 
@@ -59,12 +57,11 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                 .AddAspNetIdentity<ApplicationUser>()
                 .AddConfigurationStore(options => options.ConfigureDbContext = migrationsResolver.SqlServerOptions)
                 .AddOperationalStore(options => options.ConfigureDbContext = migrationsResolver.SqlServerOptions)
-#if DEBUG
                 //.AddDeveloperSigningCredential()
-                .AddSigningCredential(new X509Certificate2("epasaule.pfx", "epasaule"))
-#else
-                //.AddSigningCredential
-#endif
+                .AddSigningCredential(new X509Certificate2(
+                    jwtConfigurator.Options.CertificatePath,
+                    jwtConfigurator.Options.CertificatePass
+                    ))
                 ;
         
 
@@ -84,25 +81,25 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
 #endif
                     options.TokenValidationParameters = new()
                     {
-                        ValidateIssuer = false,
-                        ValidIssuer = jwtConfigurator.JwtIssuer,
+                        ValidIssuer = jwtConfigurator.Options.ValidIssuer,
+                        ValidateIssuer = jwtConfigurator.Options.ValidateIssuer,
                         
-                        ValidateIssuerSigningKey = false,
-                        
+
+                        ValidAudience = jwtConfigurator.Options.ValidAudience,
+                        ValidateAudience = jwtConfigurator.Options.ValidateAudience,
+
                         IssuerSigningKey = jwtConfigurator.SigningKey,
                         IssuerSigningKeys = [jwtConfigurator.SigningKey],
+                        ValidateIssuerSigningKey = jwtConfigurator.Options.ValidateIssuerSigningKey,
 
-                        ValidateAudience = false,
-                        ValidAudience = jwtConfigurator.JwtIssuer,
-
-                        ValidateLifetime = true,
+                        ValidateLifetime = jwtConfigurator.Options.ValidateTokenLifespan,                        
                         ClockSkew = TimeSpan.FromSeconds(3 * 60),
-
+#if DEBUG
                         LogValidationExceptions = true,
                         LogTokenId = true,
-                        
+#endif                        
                     };
-
+#if DEBUG
                     options.Events = new JwtBearerEvents
                     {
                         OnMessageReceived = ctx =>
@@ -132,8 +129,8 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
                             return Task.CompletedTask;
                         },
                     };
+#endif
 
-                    
                 });
         services.AddAuthorization(options =>
         {
