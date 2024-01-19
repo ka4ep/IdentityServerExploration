@@ -18,7 +18,6 @@ public class JwtConfigurator
     
     public TimeSpan TokenLifespan { get; }
 
-    public string JwtKey { get; }
     public string JwtIssuer { get; }
     public SecurityKey SigningKey { get; }
 
@@ -28,7 +27,6 @@ public class JwtConfigurator
 
     public JwtConfigurator(IConfiguration configuration)
     {
-        JwtKey = configuration.GetSection($"{JwtSection}:{JwtSectionKey}").Get<string>() ?? throw new AuthenticationFailureException($"appsettings.json does not contain {JwtSection}:{JwtSectionKey} value");
         JwtIssuer = configuration.GetSection($"{JwtSection}:{JwtSectionIssuer}").Get<string>() ?? throw new AuthenticationFailureException($"appsettings.json does not contain {JwtSection}:{JwtSectionIssuer} value");
 
         // Use RSA, symmetric does not get properly checked against kid/KeyId
