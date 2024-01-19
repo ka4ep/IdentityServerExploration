@@ -1,11 +1,13 @@
-## Preparation
+# Preparation
+
+## NuGet packages
 
 Normally only a few NuGet packages required to get started. If `IdentityServer4` packages are used, you may get warnings about `AutoMapper 12` having trouble to resolve some pre-release dependencies. Original `IdentityServer4` is no more maintained and is left with that umm... bug. First of all, let's swap all `IdentityServer4`.* packages for `Cnblogs.IdentityServer4`.* packages. These are the original sources fork and have dependencies fixed for us. But what about the rest? If we take a look in Visual Studio installed packages, we'd see a hundred of transient dependencies of prehistoric versions. We know, packages get updated, bugs fixed, some are deprecated of even vulnerable. So far, the only way to keep these up to date is to convert these into top-level dependencies. I haven't got a tool yet, but it can be done manually. Just click on each, install the latest version... It a tedious process and may take up to an hour. Some dependencies would not install without others having installed beforehand.
 
 Below is a list that could be simply copied into your new server project to save a whole lot of time:
 
 <details>
-  <summary>NuGet dependencies</summary>
+  <summary>.NET 8 NuGet dependencies</summary>
 
     <PackageReference Include="AutoMapper" Version="12.0.1" />
     <PackageReference Include="AutoMapper.Collection" Version="9.0.0" />
@@ -141,3 +143,98 @@ Below is a list that could be simply copied into your new server project to save
     <PackageReference Include="System.Threading.Tasks.Extensions" Version="4.5.4" />
 
 </details>
+
+---
+
+Actually, for a small project you may use in-memory `IdentityServer` and have it's contents populated from hard-coded values or even `appsettings.json` which we will use later.
+
+But the big daddies go for the database...
+
+## Entity Framework Core
+
+
+
+### Database models and contexts
+
+It will be very benefitial to create new derived classes for users and roles. This way you may even control the type of `Id` columns. Let's define these and (of course!) **ApplicationDbContext**:
+
+```
+public class ApplicationUser : IdentityUser<Guid> { }
+public class ApplicationRole : IdentityRole<Guid> { }
+public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options) { }
+```
+<sup>Note a .NET8 C#12 primary constructor feature used in ApplicationDbContext class. We won't override anything and may keep it a one-liner. Sweet!</sup>
+
+Having defined **ApplicationDbContext** we need to mention another two required database context classes that come from *IdentityServer4.EntityFramework.DbContexts* namespace: **ConfigurationDbContext** and **PersistedGrantDbContext**. Normally we don't need anything extra using those, but just to get ahead of future problems with database migration it's good to define design-time factories for those. It seems there are no problems migrating these having just started writing application code. But if we decide to go from scratch half-way to production server, we'll get a number of exceptions. One of them is a lack of parameter-less constructor that expects some options to be passed in. So, we may want to implement **IDesignTimeDbContextFactory<TDbContext>** interface which will help to pass **DbContextOptions<TDbContext>** into **DbContext** constructor. During *external* migration we'd have only a liited amount of services available. Since we want to define our database connection string in **appsettings.json** file, we need to configure reading from it. I've defined one factory myself, but to make life easier with **ConfigurationDbContext** and **PersistedGrantDbContext** I've found a base class somewhere on the internet:
+
+<details>
+  <summary>DesignTimeDbContextFactoryBase</summary>
+
+```
+public abstract class DesignTimeDbContextFactoryBase<TContext> : IDesignTimeDbContextFactory<TContext> where TContext : DbContext
+{
+    protected string ConnectionStringName { get; }
+    protected String MigrationsAssemblyName { get; }
+    public DesignTimeDbContextFactoryBase(string connectionStringName, string migrationsAssemblyName)
+    {
+        ConnectionStringName = connectionStringName;
+        MigrationsAssemblyName = migrationsAssemblyName;
+    }
+
+    public TContext CreateDbContext(string[] args)
+    {
+        return Create(
+            Directory.GetCurrentDirectory(),
+            Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT"),
+            ConnectionStringName, MigrationsAssemblyName);
+    }
+    protected abstract TContext CreateNewInstance(
+        DbContextOptions<TContext> options);
+
+    public TContext CreateWithConnectionStringName(string connectionStringName, string migrationsAssemblyName)
+    {
+        var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+        var basePath = AppContext.BaseDirectory;
+        return Create(basePath, environmentName, connectionStringName, migrationsAssemblyName);
+    }
+
+    private TContext Create(string basePath, string environmentName, string connectionStringName, string migrationsAssemblyName)
+    {
+        var builder = new ConfigurationBuilder()
+            .SetBasePath(basePath)
+            .AddJsonFile("appsettings.json")
+            .AddJsonFile($"appsettings.{environmentName}.json", true)
+            .AddEnvironmentVariables();
+
+        var config = builder.Build();
+
+        var connstr = config.GetConnectionString(connectionStringName);
+
+        if (string.IsNullOrWhiteSpace(connstr) == true)
+            throw new InvalidOperationException("Could not find a connection string named 'default'.");
+
+        return CreateWithConnectionString(connstr, migrationsAssemblyName);
+    }
+
+    private TContext CreateWithConnectionString(string connectionString, string migrationsAssemblyName)
+    {
+        if (string.IsNullOrEmpty(connectionString))
+            throw new ArgumentException($"{nameof(connectionString)} is null or empty.", nameof(connectionString));
+
+        var optionsBuilder = new DbContextOptionsBuilder<TContext>();
+
+        Console.WriteLine("{1}: Connection string: {0}", connectionString, GetType().Name);
+
+        optionsBuilder.UseSqlServer(connectionString, sqlServerOptions => sqlServerOptions.MigrationsAssembly(migrationsAssemblyName));
+
+        DbContextOptions<TContext> options = optionsBuilder.Options;
+
+        return CreateNewInstance(options);
+    }
+}
+```
+</details>
+
+
+
+
