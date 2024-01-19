@@ -27,7 +27,7 @@ public class ExampleController : ControllerBase
         return new EmptyResult();
     }
 
-    [Authorize(Roles = "admin")]
+    [Authorize(Policy = "Admin")]
     [HttpGet(nameof(AdminOnly))]
     public async Task<IActionResult> AdminOnly()
     {
@@ -36,7 +36,7 @@ public class ExampleController : ControllerBase
     }
 
     
-    [Authorize(Roles = "viewer")]
+    [Authorize(Policy = "Viewer")]
     [HttpGet(nameof(AdminAndInvoiceOnly))]
     public async Task<IActionResult> AdminAndInvoiceOnly()
     {

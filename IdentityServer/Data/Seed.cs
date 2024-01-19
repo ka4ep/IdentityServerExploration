@@ -15,7 +15,6 @@ internal static class Seed
 {
     internal static async Task SeedWithSampleUsersAsync(UserManager<ApplicationUser> userManager)
     {
-        // NOTE: ToList важен, так как при удалении пользователя меняется список пользователей
         foreach (var user in userManager.Users.ToList())
         {
             var claims = await userManager.GetClaimsAsync(user);

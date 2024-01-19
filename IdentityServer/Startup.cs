@@ -132,10 +132,13 @@ public class Startup(IWebHostEnvironment environment, IConfiguration configurati
 #endif
 
                 });
-        services.AddAuthorization(options =>
-        {
-            //
-        });
+        services.AddAuthorizationBuilder()
+            .AddPolicy("Admin", policy => policy.RequireRole("admin"))
+            .AddPolicy("Viewer", policy =>
+            {
+                policy.RequireAssertion(ctx => 
+                ctx.User.IsInRole("admin") || ctx.User.IsInRole("viewer"));
+            });
 
         services.AddScoped<IProfileService, ProfileService>();
         services.AddTransient<ICookieManager, ChunkingCookieManager>();

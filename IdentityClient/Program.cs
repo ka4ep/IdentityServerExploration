@@ -35,7 +35,7 @@ public static class Program
 
             var passwordBasedConnection = await discoverableConnection.RequestPasswordTokenAsync(
                     new ServerConnection.ClientInfo("Test", "" /*"CACEBCF1-DA16-44A9-9ADD-9D453AA716CF"*/, "openid profile"),
-                    new ServerConnection.ClientCredentials("viewer", "Qwerty1234!")
+                    new ServerConnection.ClientCredentials("admin@nonsense.com", "Qwerty1234!")
                     );
 
             var userInfo = await passwordBasedConnection.GetUserInfo();
@@ -45,7 +45,7 @@ public static class Program
             var response = await passwordBasedConnection.CallGetMethodAsync(
                     "/api/Example/Test",
                     content: null,
-                    new ServerConnection.Realms(["api1"], [], []));
+                    new ServerConnection.Realms([], [], []));
             Console.WriteLine(response);
 
             var adminResponse1 = await passwordBasedConnection.CallGetMethodAsync(
