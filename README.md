@@ -154,7 +154,7 @@ But the big daddies go for the database...
 
 It will be very benefitial to create new derived classes for users and roles. This way you may even control the type of `Id` columns. Let's define these and (of course!) **ApplicationDbContext**:
 
-```
+```cs
 public class ApplicationUser : IdentityUser<Guid> { }
 public class ApplicationRole : IdentityRole<Guid> { }
 public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options) : IdentityDbContext<ApplicationUser, ApplicationRole, Guid>(options) { }
@@ -166,7 +166,7 @@ Having defined *ApplicationDbContext* we need to mention another two required da
 <details>
   <summary>DesignTimeDbContextFactoryBase</summary>
 
-```
+```cs
 public abstract class DesignTimeDbContextFactoryBase<TContext> : IDesignTimeDbContextFactory<TContext> where TContext : DbContext
 {
     protected string ConnectionStringName { get; }
@@ -225,7 +225,7 @@ public abstract class DesignTimeDbContextFactoryBase<TContext> : IDesignTimeDbCo
 <details>
   <summary>This is how factory classes look now</summary>
 
-```
+```cs
 public class DesignTimeContextFactory : IDesignTimeDbContextFactory<ApplicationDbContext>
 {
     public ApplicationDbContext CreateDbContext(string[] args)
@@ -301,11 +301,7 @@ Yes, It's a legacy way to set up things and I got it from *IdentityServer* templ
 
 I've tried to keep the most settings in **appsettings.json** file so that we wouldn't have to ship a new version for any little change. Basically, we tell *IdentityServer* that we want to use *EntityFrameworkCore* with, say *SqlServer* and the same database, and migrations are there too. Note, that we don't use *.AddDeveloperSigningCredential()* even for debugging purposes. Instead, we use our newly created certificate and read it's path and password from *appsettings.json* *Jwt* section. Our helper class *JwtConfigurator* does the same. Class *JwtConfiguratorOptions* holds settings for *TokenValidationParameters* in *AddJwtBearer* method.
 
-Quite *important* scope registered class **ProfileService** - this is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where kind of magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging. But we automatically add users' roles to an IssuedClaims list, which then is checked against [Authorize] attribute requirements, in our case - *Policies* (*not* roles).
-
-> An important point-of-view change is we'll use *policies* as roles and *roles* as actions.
-
-Policies allow for us to use * *this **or** that**  match, rather than *this **and** that*. So, we may allow admin or viewer, not just someone who is both admin and viewer. An admin role may include viewer, but not otherwise. An authorization will fails this way.
+Quite *important* scope registered class **ProfileService** - this is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where kind of magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging. But we automatically add users' roles to an IssuedClaims list, which then is checked against [Authorize] attribute requirements.
 
 Next, there's an **.AddAuthorizationBuilder()** call with a policies setup, that's also really important. But we'll get there [later](#authbuilder).
 
@@ -320,7 +316,7 @@ Being mentioned so many times, we haven't looked in it yet. Let's do so:
 <details>
   <summary>appsettings.json</summary>
 
-```
+```cs
 {
   "Logging": {
     "LogLevel": {
@@ -456,13 +452,14 @@ Being mentioned so many times, we haven't looked in it yet. Let's do so:
 
 We have **ConnectionStrings.DefaultConnection** for our database. There is 'original' **Kestrel** section for which we can find some information on the internet and tune however we want. Plus, endpoint address is there too - we'll want to use it in other sections.
 
-Next, **Jwt** section is of C# type **JwtConfiguratorOptions**. it defines what certificate we use, what happens with all (some, actually) validations we may require. *CertificatePath* and *CertificatePass* (for password) are crucial for our server. That **IssuerSigningKey**(-s) can be of a *SymmetricSecurityKey* type, but whatever I've tried, internally it gets validated against *RsaSecurityKey* and fails. Error says something like *kid/KeyId* are not found or incorrect, even if I've explicitly defined one! The only option left is to use *RsaSecurityKey*. No problem with that so far.
+Next, **Jwt** section is of our own C# type **JwtConfiguratorOptions**. It defines what certificate we use, what happens with all (some, actually) validations we may require. *CertificatePath* and *CertificatePass* (for password) are crucial for our server. That **IssuerSigningKey**(-s) can be of a *SymmetricSecurityKey* type, but as fas as I've tried, internally it gets validated against *RsaSecurityKey* and fails. Error says something like *kid/KeyId* are not found or incorrect, even if I've explicitly defined one! The only option left is to use *RsaSecurityKey*. No problem with that so far.
 
 Moving on to **IdentityServerAccess** section. It corresponds to our *IdentityServerConfigurationOptions* class with lists of original models from *IdentityServer4.EntityFramework.Entities* namespace. That's why some arrays look that ugly: objects have a few properties, but only the ones I've put are required. Again, we may consider rolling our own classes, or may be just use models from *IdentityServer4.Models* namespace and then convert them using *.ToEntity()* extension methods. Any approach will do.
 
 # Identity Server
 
 Let's discuss and try to understand, what parts of the *IdentityServer* configuration is required for role-based web login/password driven authorization.
+
 ### IdentityResources
 
 It's a list of scope keywords that server is happy to accept if authenticated user would call /connect/userinfo and pass his access token (along with scope keywords). Scope `openid` is *mandatory* to match user by id with the one in the database. Keywords
@@ -483,12 +480,12 @@ This is one of allowed clients - our web-based one. GrantType - password, does n
 
 ## What about the users?
 
-Basic user config is actually quite simple. We need and *Id* of type *Guid* (remember [Database models and contexts] section?), *UserName*, maybe *Email*. We register them providing password that will be hashed and salted in the database. We as well add roles to users. One day we'll be able to set users' roles from dashboard UI.
+Basic user config is actually quite simple. We need an *Id* of type *Guid* (remember [Database models and contexts] section?), *UserName*, maybe *Email*. We register them providing password that will be hashed and salted in the database. We as well add roles to users. One day we'll be able to set users' roles from dashboard UI.
 
 <details>
   <summary>Seed the users just for the tests</summary>
   
-```
+```cs
 internal static class Seed
 {
     internal static async Task SeedWithSampleUsersAsync(UserManager<ApplicationUser> userManager)
@@ -563,9 +560,9 @@ We've got `admin` and `viewer` users.
 
 ## Controllers and their methods
 
-We'll test access using an *ExampleController*:
+Let's pretend for a moment that we'll user roles as *roles*. Just what documentation states. We'll test access using an *ExampleController*:
 
-```
+```cs
 [Route("api/[controller]")]
 [ApiController]
 public class ExampleController : ControllerBase
@@ -608,7 +605,7 @@ Let's see. Controller method, as we think, should have [Authorize(Roles = "admin
 
 Now, **the salt of it all**. My numerous attempts to get sole roles working turned into a pumpkin. It's been said somewhere that role-based authorization is not very practical and it's best to go for policies. Let's redefine attributes for those two methods:
 
-```
+```cs
     [Authorize(Policy = "Admin")]
     [HttpGet(nameof(AdminOnly))]
     public async Task<IActionResult> AdminOnly()
@@ -627,7 +624,7 @@ Now, **the salt of it all**. My numerous attempts to get sole roles working turn
 ```
 To make these policies work, we have to <a id="authbuilder">define</a> them in the `Startup.cs` file:
 
-```
+```cs
         services.AddAuthorizationBuilder()
             .AddPolicy("Admin", policy => policy.RequireRole("admin"))
             .AddPolicy("Viewer", policy =>
@@ -636,7 +633,11 @@ To make these policies work, we have to <a id="authbuilder">define</a> them in t
                 ctx.User.IsInRole("admin") || ctx.User.IsInRole("viewer"));
             });
 ```
-Now both methods' authorization works as expected, hence the ***or*** within assertion.
+Now both methods' authorization works as expected, hence the ***or*** within assertion. This could be anything we want, including database check.
+
+> An important point-of-view change: we'll use ***Policies*** as *roles* and ***Roles*** as some sort of actions.
+
+Policies allow for us to use flexible *this **or** that*  match, rather than fixed *this **and** that*. So, we may allow admin or viewer, not just someone who is both admin and viewer. An admin role may include viewer, but not otherwise. An authorization will fail this way.
 
 #### Future thoughts
 
