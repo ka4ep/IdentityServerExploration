@@ -271,7 +271,7 @@ public class PersistedGrantContextDesignTimeFactory : DesignTimeDbContextFactory
 
 Let's prepare a database migration (changes list, rollback list) and actually update the database to have our tables created along with **Id** columns being of type **Guid** we defined earlier.
 
-```
+```bat
 dotnet ef migrations add InitialIdentityServerApplicationDbMigration -c ApplicationDbContext -o Data/Migrations/IdentityServer/ApplicationDb
 dotnet ef migrations add InitialIdentityServerConfigurationDbMigration -c ConfigurationDbContext -o Data/Migrations/IdentityServer/ConfigurationDb
 dotnet ef migrations add InitialIdentityServerPersistedGrantDbMigration -c PersistedGrantDbContext -o Data/Migrations/IdentityServer/PersistedGrantDb
@@ -285,7 +285,7 @@ Now we should have 30 *IdentityServer* tables created for us plus *_EFMigrations
 
 Although we may create certificates at any time, let's just get over with it now.
 
-```
+```bat
 "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\MakeCert" -n "CN=localhost" -a sha256 -sv debug.pvk -r debug.cer
 "C:\Program Files (x86)\Windows Kits\10\bin\10.0.22621.0\x64\pvk2pfx" -pvk debug.pvk -spc debug.cer -pfx debug.pfx -pi passwordEnteredEarlier
 ```
