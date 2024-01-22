@@ -301,9 +301,13 @@ Yes, It's a legacy way to set up things and I got it from *IdentityServer* templ
 
 I've tried to keep the most settings in **appsettings.json** file so that we wouldn't have to ship a new version for any little change. Basically, we tell *IdentityServer* that we want to use *EntityFrameworkCore* with, say *SqlServer* and the same database, and migrations are there too. Note, that we don't use *.AddDeveloperSigningCredential()* even for debugging purposes. Instead, we use our newly created certificate and read it's path and password from *appsettings.json* *Jwt* section. Our helper class *JwtConfigurator* does the same. Class *JwtConfiguratorOptions* holds settings for *TokenValidationParameters* in *AddJwtBearer* method.
 
-Not an **important** scope registered class - this is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where sort of magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging.
+Quite *important* scope registered class **ProfileService** - this is our implementation of **IProfileService**. I found this one on the internet too :) It matches claimed roles of an authenticated user with ones registered in the database and passes what's matched into the middleware context. According to that, the server will either grant access to a controller method, or throw a 403 Forbidden status code. That's where kind of magic happens. The *DefaultProfileService* out-of-the-box actually doesn't do anything interesting except for logging. But we automatically add users' roles to an IssuedClaims list, which then is checked against [Authorize] attribute requirements, in our case - *Policies* (*not* roles).
 
-There's an **.AddAuthorizationBuilder()** call with a bunch of stuff, that's really important. But we'll get there later.
+> An important point-of-view change is we'll use *policies* as roles and *roles* as actions.
+
+Policies allow for us to use * *this **or** that**  match, rather than *this **and** that*. So, we may allow admin or viewer, not just someone who is both admin and viewer. An admin role may include viewer, but not otherwise. An authorization will fails this way.
+
+Next, there's an **.AddAuthorizationBuilder()** call with a policies setup, that's also really important. But we'll get there [later](#authbuilder).
 
 ### Program.cs
 
@@ -621,7 +625,7 @@ Now, **the salt of it all**. My numerous attempts to get sole roles working turn
         return new EmptyResult();
     }
 ```
-To make these policies work, we have to define them in the `Startup.cs` file:
+To make these policies work, we have to <a id="authbuilder">define</a> them in the `Startup.cs` file:
 
 ```
         services.AddAuthorizationBuilder()
