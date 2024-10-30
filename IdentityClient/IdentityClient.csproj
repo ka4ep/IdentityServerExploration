@@ -9,10 +9,10 @@
 
   <ItemGroup>
       <FrameworkReference Include="Microsoft.AspNetCore.App"></FrameworkReference>
-      <PackageReference Include="IdentityModel" Version="6.2.0" />
+      <PackageReference Include="IdentityModel" Version="7.0.0" />
       <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
       	  <PackageReference Include="Serilog.Extensions.Logging" Version="8.0.0" />
-      <PackageReference Include="Serilog.Sinks.Console" Version="5.0.1" />
+      <PackageReference Include="Serilog.Sinks.Console" Version="6.0.0" />
 <!--      <PackageReference Include="IdentityModel.OidcClient" Version="5.2.1" /> -->
   </ItemGroup>
 
